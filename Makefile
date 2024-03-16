@@ -102,6 +102,7 @@ create-iso: build create-initramfs
 	--install-modules="normal linux search all_video gfxterm font \
 	part_acorn part_amiga part_apple part_bsd part_dfly \
 	part_dvh part_gpt part_plan part_sun part_sunpc"
+	part_dvh part_gpt part_plan part_sun part_sunpc"
 
 run: create-iso
 	@echo "running..."
