@@ -30,6 +30,7 @@ initramfs-img:=$(binary)/initramfs.img
 # iso
 iso-img:=$(binary)/$(name).iso
 iso-dir:=$(binary)/iso
+dd-device:=/dev/sda
 
 # commands
 download:=wget -qc
@@ -40,7 +41,7 @@ runner:=qemu-system-$(arch)
 cpu-cores:=$(shell nproc)
 
 # targets
-all: build create-initramfs create-iso run
+all: create-iso run
 
 build:
 	@echo "start building $(name)"
@@ -71,12 +72,11 @@ build:
 
 	@cp $(kernel-path) $(kernel)
 	@cp $(busybox-path) $(busybox)
-	
 	@echo "build success!"
 
-create-initramfs:
+create-initramfs: build
 	@echo "creating initramfs..."
-	@mkdir -p $(initramfs-dir)/{bin,dev,etc,proc,sys}
+	@mkdir -p $(initramfs-dir)/{bin,dev,etc,proc,sys,usr}
 	@cp $(config)/init $(initramfs-dir)/init
 	@chmod 777 $(initramfs-dir)/init
 	@cp $(busybox) $(initramfs-bin)/busybox
@@ -86,27 +86,30 @@ create-initramfs:
 	@(cd $(initramfs-dir) && find . | cpio -R root:root -H newc -o | gzip > ../../$(initramfs-img))
 	@echo "done!"
 
-create-iso:
+create-iso: build create-initramfs
 	@echo "creating iso..."
 	@mkdir -p $(iso-dir)/boot/grub
 	@cp {,$(kernel),$(initramfs-img)} $(iso-dir)/boot/
 	@cp $(config)/grub.cfg $(iso-dir)/boot/grub/
 	
-	@grub-mkrescue \
+	@grub-mkrescue -o $(iso-img) $(iso-dir) \
 	--product-name=$(name) \
 	--compress="xz" \
-	--core-compress=xz \
-	--fonts="" \
+	--fonts="unicode" \
 	--locales="" \
-	--themes="" \
-	--install-modules="normal linux \
+	--themes=""
+	--install-modules="normal linux search all_video gfxterm font \
 	part_acorn part_amiga part_apple part_bsd part_dfly \
-	part_dvh part_gpt part_plan part_sun part_sunpc" \
-	-o $(iso-img) $(iso-dir)
+	part_dvh part_gpt part_plan part_sun part_sunpc"
 
-run:
+run: create-iso
 	@echo "running..."
 	@$(runner) $(iso-img) &
+
+dd: create-iso
+	@echo "WARNING: be careful!"
+	@echo "writing to $(dd-device)..."
+	sudo dd if=$(iso-img) of=$(dd-device)
 
 clean:
 	@rm -rf $(binary) $(sources)
