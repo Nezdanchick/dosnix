@@ -4,7 +4,7 @@ arch:=x86_64
 binary:=./binary
 sources:=./sources
 downloads:=./downloads
-initramfs-files:=./files
+config:=./config
 
 # latest linux kernel
 kernel-url:=$(shell wget -q "http://kernel.org" -O - | grep 'tar.xz' | head -1 | cut -d "=" -f2 | sed -e 's/\"//g' | sed -e 's/>.*//g')
@@ -22,9 +22,14 @@ busybox-src:=$(sources)/$(shell echo $(busybox-tar-filename) | sed -e 's/.tar.bz
 busybox-path:=$(busybox-src)/busybox_unstripped
 busybox:=$(binary)/busybox
 
+# initramfs
 initramfs-dir:=$(binary)/initramfs
 initramfs-bin:=$(initramfs-dir)/bin
 initramfs-img:=$(binary)/initramfs.img
+
+# iso
+iso-img:=$(binary)/$(name).iso
+iso-dir:=$(binary)/iso
 
 # commands
 download:=wget -qc
@@ -35,7 +40,7 @@ runner:=qemu-system-$(arch)
 cpu-cores:=$(shell nproc)
 
 # targets
-all: build create-initramfs run
+all: build create-initramfs create-iso run
 
 build:
 	@echo "start building $(name)"
@@ -72,7 +77,7 @@ build:
 create-initramfs:
 	@echo "creating initramfs..."
 	@mkdir -p $(initramfs-dir)/{bin,dev,etc,proc,sys}
-	@cp -r $(initramfs-files)/* $(initramfs-dir)/
+	@cp $(config)/init $(initramfs-dir)/init
 	@chmod 777 $(initramfs-dir)/init
 	@cp $(busybox) $(initramfs-bin)/busybox
 
@@ -82,23 +87,27 @@ create-initramfs:
 	@echo "done!"
 
 create-iso:
-	# @echo "creating iso..."
-	# @mkdir -p $(dir $(ISO))
-	# cp $(KERNEL) $(ISO_PATH)/boot/kernel
-	# grub-mkrescue \
-	# --product-name=$(name) \
-	# --compress="no" \
-	# --fonts="unicode" \
-	# --locales="" \
-	# --themes="" \
-	# --install-modules="all_video normal \
-	# part_acorn part_amiga part_apple part_bsd part_dfly \
-	# part_dvh part_gpt part_plan part_sun part_sunpc" \
-	# -o $(ISO) $(ISO_PATH)
+	@echo "creating iso..."
+	@mkdir -p $(iso-dir)/boot/grub
+	@cp {,$(kernel),$(initramfs-img)} $(iso-dir)/boot/
+	@cp $(config)/grub.cfg $(iso-dir)/boot/grub/
+	
+	@grub-mkrescue \
+	--product-name=$(name) \
+	--compress="xz" \
+	--core-compress=xz \
+	--fonts="" \
+	--locales="" \
+	--themes="" \
+	--install-modules="normal linux \
+	part_acorn part_amiga part_apple part_bsd part_dfly \
+	part_dvh part_gpt part_plan part_sun part_sunpc" \
+	-o $(iso-img) $(iso-dir)
 
 run:
 	@echo "running..."
-	@$(runner) -kernel $(kernel) -initrd $(initramfs-img) &
+	@$(runner) $(iso-img) &
+
 clean:
 	@rm -rf $(binary) $(sources)
 
